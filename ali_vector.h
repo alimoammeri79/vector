@@ -10,7 +10,7 @@
 #include <algorithm>
 
 namespace ali {
-    template <class T> class vector {
+    template <typename T> class vector {
     public:
         vector()
                 : m_size{0}, m_capacity{0}, ptr{nullptr} {}
@@ -59,16 +59,10 @@ namespace ali {
         }
 
         void push_back(const T& value) {
-            std::size_t new_size{m_size + 1};
-            if(new_size > m_capacity)
-            {
-                std::size_t new_capacity {new_size * 2};
-                T* new_ptr{m_alloc.allocate(new_capacity)};
-                std::copy(ptr, ptr + m_size, new_ptr);
-                m_alloc.deallocate(ptr, m_capacity);
-                m_capacity = new_capacity;
-                ptr = new_ptr;
-            }
+            if(m_capacity == 0)
+                reserve(8);
+            else if(m_size == m_capacity)
+                reserve(m_size * 2);
             ptr[m_size++] = value;
         }
 
@@ -101,13 +95,13 @@ namespace ali {
             }
         }
 
-        void reserve(std::size_t capacity) {
-            if (capacity > m_capacity) {
-                T* new_ptr{m_alloc.allocate(capacity)};
+        void reserve(std::size_t space) {
+            if (space > m_capacity) {
+                T* new_ptr{m_alloc.allocate(space)};
                 std::copy(ptr, ptr + m_size, new_ptr);
                 m_alloc.deallocate(ptr, m_capacity);
                 ptr = new_ptr;
-                m_capacity = capacity;
+                m_capacity = space;
             }
         }
 
@@ -135,30 +129,47 @@ namespace ali {
         }
 
         ali::vector<T>& operator=(const ali::vector<T>& rhs) noexcept {
-            m_size = rhs.size();
-            T* new_ptr{m_alloc.allocate(rhs.capacity())};
+            if(this == &rhs)
+                return *this;
+
+            if(rhs.size() <= m_capacity) {
+                std::copy(rhs.ptr, rhs.ptr + rhs.size(), ptr);
+                m_size = rhs.size();
+                return *this;
+            }
+
+            T* new_ptr{m_alloc.allocate(rhs.size())};
             std::copy(rhs.ptr, rhs.ptr + rhs.size(), new_ptr);
             m_alloc.deallocate(ptr, m_capacity);
-            m_capacity = rhs.capacity();
             ptr = new_ptr;
+            m_capacity = m_size = rhs.size();
             return *this;
         }
 
         ali::vector<T>& operator=(ali::vector<T>&& rhs) noexcept {
-            T* new_ptr{m_alloc.allocate(rhs.capacity())};
-            std::copy(rhs.ptr, rhs.ptr + rhs.size(), new_ptr);
-            m_alloc.deallocate(ptr, m_capacity);
-            m_size = rhs.size();
-            m_capacity = rhs.capacity();
-            ptr = new_ptr;
+            if(this == &rhs)
+                return *this;
+
+            if(rhs.size() <= m_capacity) {
+                std::copy(rhs.ptr, rhs.ptr + rhs.size(), ptr);
+                m_size = rhs.size();
+            } else {
+                    T* new_ptr{m_alloc.allocate(rhs.size())};
+                    std::copy(rhs.ptr, rhs.ptr + rhs.size(), new_ptr);
+                    m_alloc.deallocate(ptr, m_capacity);
+                    ptr = new_ptr;
+                    m_capacity = m_size = rhs.size();
+            }
+            
             rhs.clear();
+            rhs.m_capacity = 0;
             return *this;
         }
 
         bool operator==(const vector &rhs) const {
-            if (m_size != rhs.size())
+            if (size() != rhs.size())
                 return false;
-            for (std::size_t i{0}; i < m_size; ++i) {
+            for (std::size_t i{0}; i < size(); ++i) {
                 if (ptr[i] != rhs[i])
                     return false;
             }
