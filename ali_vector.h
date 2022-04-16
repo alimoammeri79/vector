@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <exception>
 #include <algorithm>
+#include <memory>
 
 namespace ali {
     template <typename T> class vector {
@@ -24,25 +25,28 @@ namespace ali {
                 : m_size{_size}, m_capacity{_size * 2} {
             ptr = m_alloc.allocate(m_capacity);
             for(std::size_t i{0}; i < m_size; ++i)
-                ptr[i] = value;
+                m_alloc.construct(ptr + i, value);
         }
 
         vector(const std::initializer_list<T>& ls)
                 : m_size{ls.size()}, m_capacity{ls.size() * 2} {
             ptr = m_alloc.allocate(m_capacity);
-            std::copy(ls.begin(), ls.end(), ptr);
+            for(std::size_t i{0}; i < ls.size(); ++i)
+                m_alloc.construct(ptr + i, *(ls.begin() + i));
         }
 
         vector(const ali::vector<T>& rhs)
                 :m_size{rhs.size()}, m_capacity{rhs.capacity()} {
             ptr = m_alloc.allocate(m_capacity);
-            std::copy(rhs.ptr, rhs.ptr + rhs.size(), ptr);
+            for(std::size_t i{0}; i < rhs.size(); ++i)
+                m_alloc.construct(ptr + i, rhs[i]);
         }
 
         vector(ali::vector<T>&& rhs) noexcept
                 :m_size{rhs.size()}, m_capacity{rhs.capacity()} {
             ptr = m_alloc.allocate(m_capacity);
-            std::copy(rhs.ptr, rhs.ptr + rhs.size(), ptr);
+            for(std::size_t i{0}; i < rhs.size(); ++i)
+                m_alloc.construct(ptr + i, rhs[i]);
             rhs.clear();
             m_capacity = 0;
         }
@@ -88,7 +92,10 @@ namespace ali {
         void shrink_to_fit() {
             if (m_size < m_capacity) {
                 T* new_ptr{m_alloc.allocate(m_size)};
-                std::copy(ptr, ptr + m_size, new_ptr);
+                for(std::size_t i{0}; i < m_size; ++i)
+                    m_alloc.construct(new_ptr + i, ptr[i]);
+                for(std::size_t i{0}; i < m_size; ++i)
+                    m_alloc.destroy(ptr + i);
                 m_alloc.deallocate(ptr, m_capacity);
                 ptr = new_ptr;
                 m_capacity = m_size;
@@ -98,7 +105,12 @@ namespace ali {
         void reserve(std::size_t space) {
             if (space > m_capacity) {
                 T* new_ptr{m_alloc.allocate(space)};
-                std::copy(ptr, ptr + m_size, new_ptr);
+
+                for(std::size_t i{0}; i < m_size; ++i)
+                    m_alloc.construct(new_ptr + i, ptr[i]);
+                for(std::size_t i{0}; i < m_size; ++i)
+                    m_alloc.destroy(ptr + i);
+
                 m_alloc.deallocate(ptr, m_capacity);
                 ptr = new_ptr;
                 m_capacity = space;
@@ -139,7 +151,10 @@ namespace ali {
             }
 
             T* new_ptr{m_alloc.allocate(rhs.size())};
-            std::copy(rhs.ptr, rhs.ptr + rhs.size(), new_ptr);
+            for(std::size_t i{0}; i < rhs.size(); ++i)
+                m_alloc.construct(new_ptr + i, rhs[i]);
+            for(std::size_t i{0}; i < m_size; ++i)
+                m_alloc.destroy(ptr + i);
             m_alloc.deallocate(ptr, m_capacity);
             ptr = new_ptr;
             m_capacity = m_size = rhs.size();
@@ -154,13 +169,16 @@ namespace ali {
                 std::copy(rhs.ptr, rhs.ptr + rhs.size(), ptr);
                 m_size = rhs.size();
             } else {
-                    T* new_ptr{m_alloc.allocate(rhs.size())};
-                    std::copy(rhs.ptr, rhs.ptr + rhs.size(), new_ptr);
-                    m_alloc.deallocate(ptr, m_capacity);
-                    ptr = new_ptr;
-                    m_capacity = m_size = rhs.size();
+                T* new_ptr{m_alloc.allocate(rhs.size())};
+                for(std::size_t i{0}; i < rhs.size(); ++i)
+                    m_alloc.construct(new_ptr + i, rhs[i]);
+                for(std::size_t i{0}; i < m_size; ++i)
+                    m_alloc.destroy(ptr + i);
+                m_alloc.deallocate(ptr, m_capacity);
+                ptr = new_ptr;
+                m_capacity = m_size = rhs.size();
             }
-            
+
             rhs.clear();
             rhs.m_capacity = 0;
             return *this;
